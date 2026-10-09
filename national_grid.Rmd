@@ -1,0 +1,58 @@
+
+---
+title: "The Grid Under Pressure"
+subtitle: "Comparing Underground Feeder Demand and Capacity"
+author: "Mohd Afwan Shaikh"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+---
+
+# Introduction
+
+For my third dataset, I selected underground electrical feeder data from National Grid's New York System Data Portal. Electricity demand can change from year to year, and understanding how heavily electrical feeders are used is important for evaluating infrastructure capacity.
+
+I want to investigate which underground feeders experienced increases in peak demand and which were operating closest to their reported summer ratings.
+
+# Data Source
+
+The dataset comes from National Grid's New York System Data Portal, using the underground feeder layer.
+
+- **Dataset:** National Grid Underground Feeders (UG)
+- **Source:** [National Grid New York System Data Portal](https://systemdataportal.nationalgrid.com/arcgis/rest/services/NYSDP/DistAssetsOverview/MapServer/2)
+
+The downloaded dataset contains 87 records and 14 attributes, including feeder identifiers, substation information, operating voltage, summer ratings, peak amperage, and percentage-of-rating values for 2022 and 2023.
+
+The CSV contains feeder attributes rather than geographic line geometry.
+
+# Research Question
+
+Which underground feeders experienced the greatest increase in peak electrical demand between 2022 and 2023, and which feeders were closest to their summer capacity ratings?
+
+# Data Tidying Approach
+
+The original dataset is in wide format because peak amperage and percentage-of-rating measurements for 2022 and 2023 are stored in separate columns.
+
+I plan to use `pivot_longer()` from the `tidyr` package to reorganize the yearly measurements into a long format with variables such as `Year`, `PeakAmps`, and `PercentRating`.
+
+I will also use `dplyr` to standardize column names, convert percentage values into numeric data, and check for missing or duplicate feeder identifiers.
+
+I will preserve the original downloaded CSV and perform the cleaning in R.
+
+# Planned Analysis
+
+I plan to calculate the difference in peak amperage between 2022 and 2023 for each feeder. I will also compare each feeder's reported percentage of summer capacity.
+
+I want to identify feeders with the largest increases in demand and examine whether those feeders are also operating near their rated capacity.
+
+I plan to create bar charts of the largest demand changes and scatterplots comparing demand growth with capacity utilization.
+
+# Expected Challenges
+
+The dataset covers a specific group of underground feeders rather than the entire New York electrical grid. Some feeder identifiers may appear more than once, so I will check the level of observation before comparing records. The dataset also covers only two years, limiting conclusions about longer-term trends.
+
+# Expected Outcome
+
+I hope to identify feeders with relatively high demand growth and capacity utilization and demonstrate how data tidying can make infrastructure performance easier to compare.

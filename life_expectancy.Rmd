@@ -1,0 +1,49 @@
+
+---
+title: "The Global Recovery Gap"
+subtitle: "Life Expectancy Before, During, and After COVID-19"
+author: "Mohd Afwan Shaikh"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+---
+
+# Introduction
+
+For my first dataset, I selected life expectancy data from the World Bank. I want to explore how life expectancy changed across different countries before, during, and after the COVID-19 pandemic. I am particularly interested in understanding whether countries recovered at the same rate or whether some countries continued to experience lower life expectancy.
+
+# Data Source
+
+The dataset comes from the World Bank's World Development Indicators database.
+
+- **Dataset:** Life expectancy at birth, total (years)
+- **Indicator:** SP.DYN.LE00.IN
+- **Source:** [World Bank Life Expectancy Data](https://data.worldbank.org/indicator/SP.DYN.LE00.IN)
+
+The original dataset contains countries, regional aggregates, and separate columns for each year. I also downloaded the country metadata and indicator information to help interpret the data.
+
+# Research Question
+
+How did life expectancy change between 2019 and 2024, and which countries experienced the strongest and weakest recoveries following the COVID-19 pandemic?
+
+# Data Tidying Approach
+
+The original dataset is in wide format because each year is stored in a separate column. I plan to use `pivot_longer()` from the `tidyr` package to convert the year columns into two variables: `Year` and `LifeExpectancy`.
+
+I will also use `dplyr` to select relevant variables, identify missing values, and separate individual countries from regional aggregates using the World Bank country metadata. I will keep the original CSV unchanged and perform all transformations in R.
+
+# Planned Analysis
+
+I plan to compare life expectancy in 2019, 2021, and 2024 to examine the decline and recovery around the pandemic. I will calculate changes in life expectancy for individual countries and compare patterns across regions and income groups.
+
+I also plan to create line charts showing trends over time and bar charts highlighting countries with the largest declines and recoveries.
+
+# Expected Challenges
+
+Some countries may have missing observations, especially for recent years. The dataset also includes regional and income-group aggregates, which need to be distinguished from individual countries. Additionally, changes during the pandemic cannot automatically be attributed entirely to COVID-19.
+
+# Expected Outcome
+
+I hope to identify differences in life expectancy recovery across countries and regions and better understand how global health outcomes changed during and after the pandemic.

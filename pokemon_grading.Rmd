@@ -1,0 +1,54 @@
+
+---
+title: "The Perfect 10 Paradox"
+subtitle: "Understanding Pokémon Card Grading and Rarity"
+author: "Mohd Afwan Shaikh"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+---
+
+# Introduction
+
+For my second dataset, I selected Pokémon Base Set card grading population data. Pokémon cards have become popular among collectors, and professionally graded cards can vary greatly in rarity. I want to explore how often cards receive a Grade 10 compared with lower grades and whether certain editions have different grading patterns.
+
+# Data Source
+
+The dataset comes from the PriceCharting Pokémon Base Set population report.
+
+- **Dataset:** Pokémon Base Set Grading Population
+- **Source:** [PriceCharting Pokémon Base Set Population Report](https://www.pricecharting.com/pop/set/pokemon-base-set)
+
+The dataset contains card names, grading population counts for Grades 6 through 10, and total graded populations. I saved the original data in a wide-format CSV file named `pokemon_grading_wide.csv`.
+
+# Research Question
+
+Which Pokémon Base Set cards have the highest and lowest Grade 10 rates, and how do grading patterns differ between 1st Edition and other card variants?
+
+# Data Tidying Approach
+
+The original dataset is in wide format because Grade 6, Grade 7, Grade 8, Grade 9, and Grade 10 are stored as separate columns.
+
+I plan to use `pivot_longer()` from the `tidyr` package to convert these grade columns into two variables: `Grade` and `Population`.
+
+I will use `dplyr` to clean card names, convert grading counts into numeric values, identify missing values, and categorize cards by edition where the names provide that information.
+
+I will also check for records that represent sealed products or other items that may not be appropriate for card-level comparisons. The original CSV will remain unchanged.
+
+# Planned Analysis
+
+I plan to calculate the Grade 10 rate for each card by dividing the number of Grade 10 copies by the reported total graded population.
+
+I will compare Grade 10 rates across cards and editions. I also plan to investigate whether cards with large grading populations necessarily have higher numbers of Grade 10 copies.
+
+Possible visualizations include bar charts of Grade 10 rates, grade-distribution charts, and scatterplots comparing total grading population with Grade 10 rates.
+
+# Expected Challenges
+
+Some grading counts may contain missing values or formatting that needs to be converted into numeric data. The total graded population may include grades not individually displayed in the dataset. I will also need to distinguish between cards, variants, and sealed products.
+
+# Expected Outcome
+
+I hope to identify which cards are relatively uncommon in Grade 10 condition and demonstrate why the number of Grade 10 copies alone does not fully describe grading rarity.
