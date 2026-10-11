@@ -1,13 +1,15 @@
 
 ---
 title: "The Grid Under Pressure"
-subtitle: "Comparing Underground Feeder Demand and Capacity"
 author: "Mohd Afwan Shaikh"
+subtitle: Comparing Underground Feeder Demand and Capacity
 output:
   html_document:
     theme: flatly
     toc: true
     toc_float: true
+  pdf_document:
+    toc: true
 ---
 
 # Introduction
@@ -23,36 +25,401 @@ The dataset comes from National Grid's New York System Data Portal, using the un
 - **Dataset:** National Grid Underground Feeders (UG)
 - **Source:** [National Grid New York System Data Portal](https://systemdataportal.nationalgrid.com/arcgis/rest/services/NYSDP/DistAssetsOverview/MapServer/2)
 
-The downloaded dataset contains 87 records and 14 attributes, including feeder identifiers, substation information, operating voltage, summer ratings, peak amperage, and percentage-of-rating values for 2022 and 2023.
+The downloaded dataset contains 87 records and 14 attributes, including feeder identifiers, substation information, operating voltage, summer ratings, peak amperage, and percentage-of-rating values for the current and previous reporting periods.
 
 The CSV contains feeder attributes rather than geographic line geometry.
 
 # Research Question
 
-Which underground feeders experienced the greatest increase in peak electrical demand between 2022 and 2023, and which feeders were closest to their summer capacity ratings?
+Which underground feeders experienced the greatest increase in peak electrical demand between the previous and current reporting periods, and which feeders were closest to their summer capacity ratings?
 
 # Data Tidying Approach
 
-The original dataset is in wide format because peak amperage and percentage-of-rating measurements for 2022 and 2023 are stored in separate columns.
+The original dataset was in wide format because peak amperage and percentage-of-rating measurements for the current and previous reporting periods were stored in separate columns.
 
-I plan to use `pivot_longer()` from the `tidyr` package to reorganize the yearly measurements into a long format with variables such as `Year`, `PeakAmps`, and `PercentRating`.
+I used `pivot_longer()` from the `tidyr` package to reorganize these measurements into a long format with variables such as `Period`, `PeakAmps`, and `PercentRating`.
 
-I will also use `dplyr` to standardize column names, convert percentage values into numeric data, and check for missing or duplicate feeder identifiers.
+I also used `dplyr` to select and rename important columns, check for missing values, and identify duplicate feeder IDs. The dataset contained no missing values or duplicate feeder identifiers.
 
-I will preserve the original downloaded CSV and perform the cleaning in R.
+I preserved the original CSV and completed the cleaning in R. The tidy dataset contained 174 rows, representing two reporting periods for each of the 87 feeders.
 
-# Planned Analysis
+# Analysis Approach
 
-I plan to calculate the difference in peak amperage between 2022 and 2023 for each feeder. I will also compare each feeder's reported percentage of summer capacity.
+I calculated the difference in peak amperage between the previous and current reporting periods for each feeder. I also compared each feeder's reported percentage of summer capacity.
 
-I want to identify feeders with the largest increases in demand and examine whether those feeders are also operating near their rated capacity.
+I identified the feeders with the largest increases in peak demand and those operating closest to their summer ratings.
 
-I plan to create bar charts of the largest demand changes and scatterplots comparing demand growth with capacity utilization.
+I created bar charts to compare demand changes and capacity utilization. I also created a scatterplot to examine the relationship between demand growth and capacity utilization.
 
-# Expected Challenges
 
-The dataset covers a specific group of underground feeders rather than the entire New York electrical grid. Some feeder identifiers may appear more than once, so I will check the level of observation before comparing records. The dataset also covers only two years, limiting conclusions about longer-term trends.
 
-# Expected Outcome
+# Data Preparation and Exploration
 
-I hope to identify feeders with relatively high demand growth and capacity utilization and demonstrate how data tidying can make infrastructure performance easier to compare.
+## Load Required Packages
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+```
+
+## Import the Original Dataset
+
+```{r import-national-grid}
+grid_raw <- read_csv(
+  "data/national_grid_ug_wide.csv",
+  show_col_types = FALSE
+)
+
+dim(grid_raw)
+
+names(grid_raw)
+
+head(grid_raw, 10) %>%
+  kable(caption = "Original National Grid Underground Feeder Data")
+```
+
+## Examine the Data Structure
+
+```{r examine-national-grid}
+glimpse(grid_raw)
+
+colSums(is.na(grid_raw))
+
+grid_raw %>%
+  summarise(
+    TotalRows = n(),
+    DuplicateRows = sum(duplicated(.))
+  ) %>%
+  kable(caption = "Initial Data Quality Check")
+```
+
+
+
+## Check Missing Values and Feeder Identifiers
+
+Before cleaning the dataset, I examined missing values and checked whether feeder identifiers appeared more than once.
+
+```{r check-grid-quality}
+# Missing values
+colSums(is.na(grid_raw))
+
+# Check duplicate feeder identifiers
+grid_raw %>%
+  count(MASTER_CDF, sort = TRUE) %>%
+  filter(n > 1) %>%
+  kable(caption = "Repeated Feeder Identifiers")
+
+# Check important measurement columns
+grid_raw %>%
+  select(
+    MASTER_CDF,
+    SUBSTATION_NAME,
+    FEEDER_SN_RATING_AMPS,
+    PEAK_AMPS_CURRENT_YEAR,
+    PCT_RATING_CURRENT_YEAR,
+    PEAK_AMPS_LAST_YEAR,
+    PCT_RATING_LAST_YEAR
+  ) %>%
+  head(10) %>%
+  kable(caption = "Feeder Demand and Capacity Measurements")
+```
+
+
+## Cleaning the National Grid Dataset
+
+The original dataset contained 87 records and 14 columns. I checked for missing values and repeated feeder identifiers. There were no missing values, and each feeder identifier was unique.
+
+The peak amperage and percentage-of-rating columns were already numeric, so no additional numeric conversion was needed. I selected the important columns and renamed them to make the analysis easier.
+
+```{r clean-national-grid}
+grid_clean <- grid_raw %>%
+  transmute(
+    FeederID = MASTER_CDF,
+    Substation = SUBSTATION_NAME,
+    Voltage = OPERATING_VOLTAGE,
+    SummerRating = FEEDER_SN_RATING_AMPS,
+    PeakAmpsCurrent = PEAK_AMPS_CURRENT_YEAR,
+    PeakAmpsLast = PEAK_AMPS_LAST_YEAR,
+    PercentRatingCurrent = PCT_RATING_CURRENT_YEAR,
+    PercentRatingLast = PCT_RATING_LAST_YEAR
+  )
+
+dim(grid_clean)
+
+head(grid_clean, 10) %>%
+  kable(caption = "Cleaned National Grid Feeder Dataset")
+```
+
+## Tidying the National Grid Dataset
+
+The original dataset stored current-year and previous-year measurements in separate columns. I used `pivot_longer()` to create a tidy dataset with one row for each feeder and reporting period.
+
+This made it easier to compare peak amperage and percentage of summer rating across the two periods.
+
+```{r tidy-national-grid}
+grid_tidy <- grid_clean %>%
+  pivot_longer(
+    cols = c(
+      PeakAmpsCurrent,
+      PeakAmpsLast,
+      PercentRatingCurrent,
+      PercentRatingLast
+    ),
+    names_to = c(".value", "Period"),
+    names_pattern = "(PeakAmps|PercentRating)(Current|Last)"
+  ) %>%
+  mutate(
+    Period = recode(
+      Period,
+      "Last" = "Previous Year",
+      "Current" = "Current Year"
+    ),
+    Period = factor(
+      Period,
+      levels = c("Previous Year", "Current Year")
+    )
+  ) %>%
+  arrange(FeederID, Period)
+
+dim(grid_tidy)
+
+head(grid_tidy, 10) %>%
+  kable(caption = "Tidy National Grid Feeder Dataset")
+```
+
+## Calculating Changes in Peak Demand
+
+I calculated the difference between current-year and previous-year peak amperage for each feeder. A positive value indicates an increase in peak demand, while a negative value indicates a decrease.
+
+I also calculated the change in percentage of summer rating to compare capacity utilization across the two periods.
+
+```{r calculate-demand-changes}
+grid_changes <- grid_clean %>%
+  mutate(
+    PeakAmpsChange = PeakAmpsCurrent - PeakAmpsLast,
+    PercentRatingChange = PercentRatingCurrent - PercentRatingLast
+  )
+
+grid_changes %>%
+  arrange(desc(PeakAmpsChange)) %>%
+  select(
+    FeederID,
+    Substation,
+    PeakAmpsLast,
+    PeakAmpsCurrent,
+    PeakAmpsChange,
+    PercentRatingCurrent
+  ) %>%
+  head(10) %>%
+  kable(
+    digits = 2,
+    caption = "Feeders with the Largest Increases in Peak Amperage"
+  )
+```
+
+# Data Visualization
+
+## Visualization 1: Largest Increases in Peak Demand
+
+This visualization shows the ten underground feeders with the largest increases in peak amperage between the previous and current reporting periods.
+
+```{r largest-demand-increases, fig.width=10, fig.height=7}
+grid_top10 <- grid_changes %>%
+  arrange(desc(PeakAmpsChange)) %>%
+  slice_head(n = 10)
+
+ggplot(
+  grid_top10,
+  aes(
+    x = reorder(FeederID, PeakAmpsChange),
+    y = PeakAmpsChange,
+    fill = Substation
+  )
+) +
+  geom_col() +
+  geom_text(
+    aes(label = round(PeakAmpsChange, 1)),
+    hjust = -0.1,
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  labs(
+    title = "Underground Feeders with the Largest Demand Increases",
+    subtitle = "Change in peak amperage between reporting periods",
+    x = "Feeder ID",
+    y = "Increase in Peak Amperage (Amps)",
+    fill = "Substation"
+  ) +
+  theme_minimal()
+```
+
+This chart shows that feeder 36_11_24352 at TEMPLE ST. had the largest increase in peak amperage, at approximately 281 amps. Another feeder at the same substation, 36_11_24354, had the second-largest increase at approximately 140 amps.
+
+The results show that peak demand changes were not the same across all feeders. Some experienced much larger increases than others.
+
+## Visualization 2: Feeders Closest to Summer Capacity
+
+This visualization compares the ten underground feeders with the highest reported current-year percentage of summer rating.
+
+```{r highest-capacity-utilization, fig.width=10, fig.height=7}
+grid_capacity_top10 <- grid_changes %>%
+  arrange(desc(PercentRatingCurrent)) %>%
+  slice_head(n = 10)
+
+ggplot(
+  grid_capacity_top10,
+  aes(
+    x = reorder(FeederID, PercentRatingCurrent),
+    y = PercentRatingCurrent,
+    fill = Substation
+  )
+) +
+  geom_col() +
+  geom_text(
+    aes(label = paste0(round(PercentRatingCurrent, 1), "%")),
+    hjust = -0.1,
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_y_continuous(
+    limits = c(0, 100)
+  ) +
+  labs(
+    title = "Underground Feeders Closest to Summer Capacity",
+    subtitle = "Top 10 feeders by current-year percentage of summer rating",
+    x = "Feeder ID",
+    y = "Summer Rating Utilization (%)",
+    fill = "Substation"
+  ) +
+  theme_minimal()
+```
+
+This chart shows that feeder 36_03_21557 at BUFF AVE STA had the highest reported summer-rating utilization at approximately 82.2%. Feeder 36_11_24352 at TEMPLE ST. followed at approximately 74.9%.
+
+Although these feeders had relatively high utilization compared with the others in the dataset, neither reached 100% of its reported summer rating.
+
+## Visualization 3: Demand Growth vs. Capacity Utilization
+
+This visualization compares the change in peak amperage with the current percentage of summer rating for each underground feeder.
+
+```{r demand-vs-capacity, fig.width=10, fig.height=7}
+ggplot(
+  grid_changes,
+  aes(
+    x = PeakAmpsChange,
+    y = PercentRatingCurrent
+  )
+) +
+  geom_point(
+    color = "steelblue",
+    alpha = 0.7,
+    size = 3
+  ) +
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    color = "darkred",
+    linetype = "dashed"
+  ) +
+  geom_vline(
+    xintercept = 0,
+    linetype = "dotted"
+  ) +
+  labs(
+    title = "Relationship Between Demand Growth and Capacity Utilization",
+    subtitle = "National Grid underground feeders",
+    x = "Change in Peak Amperage (Amps)",
+    y = "Current Summer Rating Utilization (%)"
+  ) +
+  theme_minimal()
+```
+
+Each point represents an underground feeder. The horizontal axis shows the change in peak amperage, while the vertical axis shows how much of the reported summer rating was used.
+
+This visualization helps determine whether feeders experiencing larger increases in demand also had higher capacity utilization. The dashed line summarizes the overall relationship, but it does not establish a cause-and-effect relationship.
+
+## Visualization 4: Peak Amperage by Reporting Period
+
+This visualization compares peak amperage in the previous and current reporting periods for the ten feeders with the largest increases in demand.
+
+```{r peak-demand-comparison, fig.width=11, fig.height=7}
+grid_tidy %>%
+  filter(FeederID %in% grid_top10$FeederID) %>%
+  ggplot(
+    aes(
+      x = reorder(FeederID, PeakAmps, FUN = max),
+      y = PeakAmps,
+      fill = Period
+    )
+  ) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Peak Amperage Comparison by Reporting Period",
+    subtitle = "Ten feeders with the largest increases in peak demand",
+    x = "Feeder ID",
+    y = "Peak Amperage (Amps)",
+    fill = "Reporting Period"
+  ) +
+  theme_minimal()
+```
+
+This grouped bar chart compares peak amperage measurements for the same feeders across two reporting periods. It shows how much demand increased for each feeder and demonstrates how tidying the dataset makes comparisons easier.
+
+## Summary Statistics
+
+```{r grid-summary-statistics}
+grid_changes %>%
+  summarise(
+    TotalFeeders = n(),
+    AveragePeakChange = mean(PeakAmpsChange),
+    MaximumPeakIncrease = max(PeakAmpsChange),
+    AverageCapacityUsage = mean(PercentRatingCurrent),
+    MaximumCapacityUsage = max(PercentRatingCurrent)
+  ) %>%
+  kable(
+    digits = 2,
+    caption = "Summary of Underground Feeder Demand and Capacity"
+  )
+```
+
+# Results and Findings
+
+The analysis included 87 underground electrical feeders from National Grid. The original dataset contained 14 columns, and after cleaning and tidying, I created a dataset with 174 rows representing two reporting periods for each feeder.
+
+The average change in peak amperage was an increase of 4.82 amps. However, some feeders experienced much larger increases than others.
+
+Feeder 36_11_24352 at TEMPLE ST. had the largest increase in peak demand, approximately 281 amps. Another feeder at TEMPLE ST., 36_11_24354, had the second-largest increase at approximately 140 amps.
+
+For summer capacity utilization, feeder 36_03_21557 at BUFF AVE STA had the highest reported utilization at 82.2%. Feeder 36_11_24352 at TEMPLE ST. was second at 74.9%.
+
+Across all 87 feeders, the average current-year summer-rating utilization was approximately 32.5%. This was much lower than the highest reported utilization of 82.2%, showing that some feeders were operating much closer to their summer ratings than others.
+
+An interesting finding is that feeder 36_11_24352 appeared in both comparisons. It had the largest increase in peak amperage and was also among the feeders closest to its summer rating.
+
+These findings show why it is useful to examine both changes in electrical demand and capacity utilization when comparing underground feeders.
+
+# Challenges and Limitations
+
+One limitation of this analysis is that the dataset contains only 87 underground feeders. Therefore, the findings do not represent the entire New York electrical grid.
+
+Another limitation is that the dataset provides measurements for only two reporting periods. This makes it difficult to determine whether the changes are part of a longer-term trend.
+
+The dataset also contains peak amperage and percentage-of-rating measurements but does not explain why demand increased or decreased. Factors such as weather, customer usage, and changes in electrical infrastructure could influence these measurements.
+
+Although the dataset includes feeder identifiers and substation names, the downloaded CSV does not contain geographic line geometry for creating a detailed feeder map.
+
+Finally, the dataset labels its measurements as current year and last year. Without confirming the reporting dates, I cannot assign specific calendar years to these values.
+
+# Conclusion
+
+This project helped me understand how electrical demand and infrastructure capacity can be compared using real-world data.
+
+By using `dplyr` and `tidyr`, I cleaned the original National Grid dataset and converted it from wide format into tidy format. This made it easier to compare peak amperage and summer-rating utilization across reporting periods.
+
+The results showed that some underground feeders experienced much larger increases in peak demand than others. Feeder 36_11_24352 at TEMPLE ST. had the largest increase, while feeder 36_03_21557 at BUFF AVE STA had the highest reported summer-rating utilization.
+
+Overall, this analysis demonstrates how data cleaning, tidying, and visualization can help identify electrical feeders with relatively high demand growth or capacity utilization. These comparisons can support further investigation, although additional information would be needed to evaluate actual infrastructure risks.

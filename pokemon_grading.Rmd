@@ -1,54 +1,441 @@
 
 ---
 title: "The Perfect 10 Paradox"
-subtitle: "Understanding Pokémon Card Grading and Rarity"
 author: "Mohd Afwan Shaikh"
+subtitle: Understanding Pokémon Card Grading and Rarity
 output:
   html_document:
     theme: flatly
     toc: true
     toc_float: true
+  pdf_document:
+    toc: true
 ---
 
 # Introduction
 
-For my second dataset, I selected Pokémon Base Set card grading population data. Pokémon cards have become popular among collectors, and professionally graded cards can vary greatly in rarity. I want to explore how often cards receive a Grade 10 compared with lower grades and whether certain editions have different grading patterns.
+For my second dataset, I selected Pokémon Base Set card grading population data. Pokémon cards have become popular among collectors, and professionally graded cards can vary greatly in rarity. In this project, I explored how often cards received a Grade 10 compared with lower grades and whether different editions had different grading patterns.
 
 # Data Source
 
-The dataset comes from the PriceCharting Pokémon Base Set population report.
+The dataset came from the PriceCharting Pokémon Base Set population report.
 
 - **Dataset:** Pokémon Base Set Grading Population
 - **Source:** [PriceCharting Pokémon Base Set Population Report](https://www.pricecharting.com/pop/set/pokemon-base-set)
 
-The dataset contains card names, grading population counts for Grades 6 through 10, and total graded populations. I saved the original data in a wide-format CSV file named `pokemon_grading_wide.csv`.
+The dataset contained card names, grading population counts for Grades 6 through 10, and total graded populations. I saved the original data in a wide-format CSV file named `pokemon_grading_wide.csv`.
 
 # Research Question
 
-Which Pokémon Base Set cards have the highest and lowest Grade 10 rates, and how do grading patterns differ between 1st Edition and other card variants?
+Which Pokémon Base Set cards had the highest and lowest Grade 10 rates, and how did grading patterns differ between 1st Edition and other card variants?
 
 # Data Tidying Approach
 
-The original dataset is in wide format because Grade 6, Grade 7, Grade 8, Grade 9, and Grade 10 are stored as separate columns.
+The original dataset was in wide format because Grades 6 through 10 were stored as separate columns.
 
-I plan to use `pivot_longer()` from the `tidyr` package to convert these grade columns into two variables: `Grade` and `Population`.
+I used `pivot_longer()` from the `tidyr` package to convert these grade columns into two variables: `Grade` and `Population`.
 
-I will use `dplyr` to clean card names, convert grading counts into numeric values, identify missing values, and categorize cards by edition where the names provide that information.
+I also used `dplyr` to remove empty rows, clean card names, convert grading counts into numeric values, and categorize cards by edition based on their names.
 
-I will also check for records that represent sealed products or other items that may not be appropriate for card-level comparisons. The original CSV will remain unchanged.
+The original CSV remained unchanged throughout the analysis.
 
-# Planned Analysis
+# Analysis Approach
 
-I plan to calculate the Grade 10 rate for each card by dividing the number of Grade 10 copies by the reported total graded population.
+I calculated the Grade 10 rate for each card by dividing the number of Grade 10 copies by the reported total graded population.
 
-I will compare Grade 10 rates across cards and editions. I also plan to investigate whether cards with large grading populations necessarily have higher numbers of Grade 10 copies.
+I compared Grade 10 rates across cards and editions. I also investigated whether cards with larger grading populations tended to have higher or lower Grade 10 rates.
 
-Possible visualizations include bar charts of Grade 10 rates, grade-distribution charts, and scatterplots comparing total grading population with Grade 10 rates.
+I created five visualizations: a bar chart of the highest Grade 10 rates, a boxplot comparing editions, a scatterplot comparing grading population with Grade 10 rates, a stacked bar chart showing the distribution of Grades 6 through 10, and a bar chart of the lowest Grade 10 rates.
 
-# Expected Challenges
+For the main visualizations, I focused on cards with at least 100 graded copies to reduce the influence of very small grading populations.
 
-Some grading counts may contain missing values or formatting that needs to be converted into numeric data. The total graded population may include grades not individually displayed in the dataset. I will also need to distinguish between cards, variants, and sealed products.
+# Data Cleaning Challenges
 
-# Expected Outcome
+One challenge was that the original dataset contained 931 rows, including 465 completely empty rows. After removing these rows, 466 records remained.
 
-I hope to identify which cards are relatively uncommon in Grade 10 condition and demonstrate why the number of Grade 10 copies alone does not fully describe grading rarity.
+Some grading counts contained commas, while others used dashes instead of numbers. I converted the numeric values and treated dashes as missing data.
+
+Another challenge was identifying different card editions. I categorized cards as 1st Edition, Shadowless, 1999–2000, or Other based on their names. The Other category included several different variants.
+
+The dataset also contained some non-card products, which I identified as a limitation when interpreting the results.
+
+# Outcome
+
+The analysis showed that Grade 10 rates differed across Pokémon Base Set cards and editions. Some cards with large grading populations had surprisingly low Grade 10 rates.
+
+The results also showed that grading population and Grade 10 rate had a negative relationship in the analyzed dataset.
+
+Overall, this project demonstrated why comparing percentages provided a more useful understanding of grading outcomes than looking at Grade 10 counts alone.
+
+# Data Preparation and Exploration
+
+## Load Required Packages
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+```
+
+## Import the Original Dataset
+
+```{r import-pokemon}
+pokemon_raw <- read_csv(
+  "data/pokemon_grading_wide.csv",
+  show_col_types = FALSE
+)
+
+dim(pokemon_raw)
+
+names(pokemon_raw)
+
+head(pokemon_raw, 10) %>%
+  kable(caption = "Original Pokémon Grading Dataset")
+```
+
+## Examine the Data Structure
+
+```{r examine-pokemon}
+glimpse(pokemon_raw)
+
+colSums(is.na(pokemon_raw))
+```
+
+## Cleaning the Pokémon Dataset
+
+The original dataset contained 931 rows, including 465 completely empty rows. I removed these empty rows and the unnecessary picture column.
+
+The grading counts were originally stored as text because some values contained commas. I converted these values into numeric format and treated dashes as missing values.
+
+I also identified card editions using the card names.
+
+```{r clean-pokemon}
+pokemon_clean <- pokemon_raw %>%
+  filter(!if_all(everything(), is.na)) %>%
+  select(-`...1`) %>%
+  mutate(
+    Card = str_trim(Card),
+    across(
+      c(`Grade 6`, `Grade 7`, `Grade 8`,
+        `Grade 9`, `Grade 10`, Total),
+      ~ parse_number(.x, na = c("", "NA", "-"))
+    ),
+    Edition = case_when(
+      str_detect(Card, regex("1st Edition", ignore_case = TRUE)) ~ "1st Edition",
+      str_detect(Card, regex("Shadowless", ignore_case = TRUE)) ~ "Shadowless",
+      str_detect(Card, regex("1999-2000", ignore_case = TRUE)) ~ "1999-2000",
+      TRUE ~ "Other"
+    )
+  ) %>%
+  filter(!is.na(Card), Card != "")
+
+dim(pokemon_clean)
+
+pokemon_clean %>%
+  select(Card, Edition, `Grade 10`, Total) %>%
+  head(10) %>%
+  kable(caption = "Cleaned Pokémon Grading Data")
+```
+
+## Calculating Grade 10 Rates
+
+I calculated the Grade 10 rate by dividing the number of Grade 10 copies by the total graded population for each card.
+
+A higher Grade 10 rate indicates that a larger percentage of the reported graded copies received the highest grade. A lower rate indicates that Grade 10 copies are less common among the graded population.
+
+```{r grade-10-rates}
+pokemon_rates <- pokemon_clean %>%
+  filter(
+    !is.na(Total),
+    Total > 0,
+    !is.na(`Grade 10`)
+  ) %>%
+  mutate(
+    Grade10Rate = (`Grade 10` / Total) * 100
+  )
+
+pokemon_rates %>%
+  select(Card, Edition, `Grade 10`, Total, Grade10Rate) %>%
+  arrange(desc(Grade10Rate)) %>%
+  head(10) %>%
+  kable(
+    digits = 2,
+    caption = "Highest Grade 10 Rates"
+  )
+```
+
+# Data Visualization
+
+## Visualization 1: Highest Grade 10 Rates
+
+This chart shows the ten cards with the highest percentage of Grade 10 copies among cards with at least 100 total graded copies. I used this minimum population to reduce the influence of very small grading samples.
+
+```{r highest-grade10-visualization, fig.width=10, fig.height=7}
+pokemon_top10 <- pokemon_rates %>%
+  filter(Total >= 100) %>%
+  arrange(desc(Grade10Rate)) %>%
+  slice_head(n = 10)
+
+ggplot(
+  pokemon_top10,
+  aes(
+    x = reorder(Card, Grade10Rate),
+    y = Grade10Rate,
+    fill = Edition
+  )
+) +
+  geom_col() +
+  geom_text(
+    aes(label = paste0(round(Grade10Rate, 1), "%")),
+    hjust = -0.1,
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_y_continuous(
+    limits = c(0, 70)
+  ) +
+  labs(
+    title = "Pokémon Cards with the Highest Grade 10 Rates",
+    subtitle = "Cards with at least 100 graded copies",
+    x = "Pokémon Card",
+    y = "Grade 10 Rate (%)",
+    fill = "Edition"
+  ) +
+  theme_minimal()
+```
+
+This visualization compares Grade 10 rates rather than the total number of Grade 10 copies. It helps distinguish cards that frequently receive the highest grade from cards that simply have large grading populations.
+
+The results are limited to cards with at least 100 graded copies. This threshold is an analysis choice rather than an official grading standard.
+
+
+## Visualization 2: Grade 10 Rates by Edition
+
+This visualization compares the distribution of Grade 10 rates across different Pokémon Base Set variants.
+
+```{r edition-visualization, fig.width=10, fig.height=6}
+pokemon_rates %>%
+  filter(Total >= 100) %>%
+  ggplot(
+    aes(
+      x = Edition,
+      y = Grade10Rate,
+      fill = Edition
+    )
+  ) +
+  geom_boxplot(alpha = 0.7) +
+  labs(
+    title = "Grade 10 Rates Across Pokémon Card Editions",
+    subtitle = "Cards with at least 100 graded copies",
+    x = "Card Edition",
+    y = "Grade 10 Rate (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none"
+  )
+```
+
+
+
+The boxplots show how Grade 10 rates vary within each edition category. The median represents the middle rate, while the boxes show the spread of the middle 50% of card rates.
+
+This helps determine whether Grade 10 results differ across editions and whether some editions have more variation than others.
+
+
+## Visualization 3: Total Graded Population vs. Grade 10 Rate
+
+This visualization explores the relationship between the total number of graded Pokémon cards and the percentage receiving Grade 10. It helps determine whether cards with larger grading populations also tend to have higher Grade 10 rates.
+
+```{r population-vs-grade10, fig.width=10, fig.height=7}
+pokemon_rates %>%
+  filter(Total >= 100) %>%
+  mutate(LogTotal = log10(Total)) %>%
+  ggplot(
+    aes(
+      x = LogTotal,
+      y = Grade10Rate,
+      color = Edition
+    )
+  ) +
+  geom_point(alpha = 0.7, size = 2.5) +
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    color = "black",
+    linetype = "dashed"
+  ) +
+  scale_x_continuous(
+    breaks = 2:5,
+    labels = scales::comma(10^(2:5))
+  ) +
+  labs(
+    title = "Does Grading Population Affect Grade 10 Rates?",
+    subtitle = "Pokémon Base Set cards with at least 100 graded copies",
+    x = "Total Graded Population (Log Scale)",
+    y = "Grade 10 Rate (%)",
+    color = "Edition"
+  ) +
+  theme_minimal()
+```
+
+Each point represents a Pokémon card or variant. The horizontal axis shows the total graded population, while the vertical axis shows the percentage receiving Grade 10. The dashed line summarizes the overall relationship between grading population and Grade 10 rate.
+
+## Visualization 4: Grade Distribution by Edition
+
+This visualization compares the percentage of grading results from Grade 6 through Grade 10 across different Pokémon card editions.
+
+```{r tidy-pokemon-grades}
+pokemon_tidy <- pokemon_clean %>%
+  pivot_longer(
+    cols = c(`Grade 6`, `Grade 7`, `Grade 8`,
+             `Grade 9`, `Grade 10`),
+    names_to = "Grade",
+    values_to = "Population"
+  ) %>%
+  mutate(
+    Grade = factor(
+      Grade,
+      levels = paste("Grade", 6:10)
+    )
+  )
+
+pokemon_tidy %>%
+  select(Card, Edition, Grade, Population) %>%
+  head(10) %>%
+  kable(caption = "Tidy Pokémon Grading Dataset")
+```
+
+```{r grade-distribution-visualization, fig.width=10, fig.height=7}
+pokemon_tidy %>%
+  filter(
+    !is.na(Population),
+    !is.na(Total),
+    Total >= 100
+  ) %>%
+  group_by(Edition, Grade) %>%
+  summarise(
+    TotalPopulation = sum(Population),
+    .groups = "drop"
+  ) %>%
+  group_by(Edition) %>%
+  mutate(
+    Percentage = TotalPopulation /
+      sum(TotalPopulation) * 100
+  ) %>%
+  ggplot(
+    aes(
+      x = Edition,
+      y = Percentage,
+      fill = Grade
+    )
+  ) +
+  geom_col(
+    position = "stack",
+    width = 0.7
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(scale = 1)
+  ) +
+  labs(
+    title = "Pokémon Grade Distribution by Edition",
+    subtitle = "Distribution of Grades 6–10 for cards with at least 100 graded copies",
+    x = "Card Edition",
+    y = "Percentage of Grades 6–10",
+    fill = "Grade"
+  ) +
+  theme_minimal()
+```
+
+This stacked bar chart shows how Grades 6 through 10 are distributed across different card editions. It helps identify whether some editions have a larger share of higher grades than others. Percentages are calculated using only the displayed Grades 6–10, not the entire reported grading population.
+
+
+## Visualization 5: Lowest Grade 10 Rates
+
+This visualization shows the ten Pokémon cards with the lowest Grade 10 rates among cards with at least 100 graded copies.
+
+```{r lowest-grade10-visualization, fig.width=10, fig.height=7}
+pokemon_bottom10 <- pokemon_rates %>%
+  filter(Total >= 100) %>%
+  arrange(Grade10Rate) %>%
+  slice_head(n = 10)
+
+ggplot(
+  pokemon_bottom10,
+  aes(
+    x = reorder(Card, Grade10Rate),
+    y = Grade10Rate,
+    fill = Edition
+  )
+) +
+  geom_col() +
+  geom_text(
+    aes(label = paste0(round(Grade10Rate, 2), "%")),
+    hjust = -0.1,
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_y_continuous(
+    limits = c(0, 1.4)
+  ) +
+  labs(
+    title = "Pokémon Cards with the Lowest Grade 10 Rates",
+    subtitle = "Cards with at least 100 graded copies",
+    x = "Pokémon Card",
+    y = "Grade 10 Rate (%)",
+    fill = "Edition"
+  ) +
+  theme_minimal()
+```
+
+This chart highlights cards where Grade 10 copies were especially uncommon compared with their total graded populations. It provides a useful comparison with the highest Grade 10 rates shown in Visualization 1.
+
+## Grade 10 Rate Summary by Edition
+
+```{r edition-summary}
+pokemon_rates %>%
+  filter(Total >= 100) %>%
+  group_by(Edition) %>%
+  summarise(
+    Cards = n(),
+    AverageGrade10Rate = round(mean(Grade10Rate), 2),
+    MedianGrade10Rate = round(median(Grade10Rate), 2),
+    .groups = "drop"
+  ) %>%
+  kable(
+    caption = "Grade 10 Rate Summary by Edition"
+  )
+```
+
+# Results and Findings
+
+The analysis showed that Grade 10 rates varied considerably across Pokémon Base Set cards and editions.
+
+Among cards with at least 100 graded copies, the 1999–2000 edition had the highest average Grade 10 rate at 37.0%. The Other category averaged 16.7%, Shadowless averaged 16.0%, and 1st Edition had the lowest average at 14.4%.
+
+One interesting finding was that Charizard #4 had 99,255 graded copies, but only 490 received Grade 10. This represented a Grade 10 rate of approximately 0.49%. In comparison, Water Energy [1999-2000] #102 had 169 Grade 10 copies out of 285 graded copies, resulting in a rate of approximately 59.3%.
+
+The analysis also found a moderate negative correlation of -0.499 between the logarithm of total graded population and Grade 10 rate. This suggested that cards with larger grading populations tended to have lower Grade 10 rates in the analyzed dataset.
+
+These findings showed why comparing percentages was more informative than comparing Grade 10 counts alone.
+
+# Challenges and Limitations
+
+One challenge was cleaning the original dataset. It contained 931 rows, including 465 completely empty rows. I removed these rows and converted grading counts from text into numeric values.
+
+Some records contained dashes instead of grading counts. I treated these as missing values rather than assuming they represented zero.The dataset also contained some non-card products, such as sealed packs. Records without valid grading totals or Grade 10 counts were excluded from the Grade 10 rate analysis. However, I did not manually verify every remaining record, so some product types may still have affected the comparisons.
+
+Another limitation was that the dataset reported Grades 6 through 10 separately, while the total graded population could include other grades. I used the reported total when calculating Grade 10 rates, but used only Grades 6 through 10 when comparing grade distributions.
+
+I also limited the main visualizations to cards with at least 100 graded copies to reduce the influence of very small grading populations. The edition categories were based on card names, and the Other category included several different variants.
+
+Finally, the correlation showed an association, not a cause-and-effect relationship. The data did not explain why some cards received higher grades than others.
+
+# Conclusion
+
+This project helped me understand how data cleaning and percentages can change the way we interpret Pokémon card rarity.
+
+The results showed that having more graded copies did not necessarily mean having a higher Grade 10 rate. Some cards with very large grading populations had surprisingly low Grade 10 percentages.
+
+I also found differences between editions, especially the higher average Grade 10 rate among 1999–2000 variants.
+
+Overall, the project demonstrated the importance of tidying data, comparing proportions, and using visualizations to discover patterns that are not obvious from raw counts alone.

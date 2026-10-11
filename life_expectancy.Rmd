@@ -1,18 +1,20 @@
 
 ---
 title: "The Global Recovery Gap"
-subtitle: "Life Expectancy Before, During, and After COVID-19"
 author: "Mohd Afwan Shaikh"
+subtitle: "Life Expectancy Before, During, and After COVID-19"
 output:
   html_document:
     theme: flatly
     toc: true
     toc_float: true
+  pdf_document:
+    toc: true
 ---
 
 # Introduction
 
-For my first dataset, I selected life expectancy data from the World Bank. I want to explore how life expectancy changed across different countries before, during, and after the COVID-19 pandemic. I am particularly interested in understanding whether countries recovered at the same rate or whether some countries continued to experience lower life expectancy.
+For my first dataset, I selected life expectancy data from the World Bank. I explored how life expectancy changed across different countries before, during, and after the COVID-19 pandemic. My main goal was to understand whether countries recovered at the same rate or whether some continued to experience lower life expectancy.
 
 # Data Source
 
@@ -22,7 +24,7 @@ The dataset comes from the World Bank's World Development Indicators database.
 - **Indicator:** SP.DYN.LE00.IN
 - **Source:** [World Bank Life Expectancy Data](https://data.worldbank.org/indicator/SP.DYN.LE00.IN)
 
-The original dataset contains countries, regional aggregates, and separate columns for each year. I also downloaded the country metadata and indicator information to help interpret the data.
+The original dataset contains countries, regional aggregates, and separate columns for each year. I also used country metadata to identify regions and income groups.
 
 # Research Question
 
@@ -30,20 +32,566 @@ How did life expectancy change between 2019 and 2024, and which countries experi
 
 # Data Tidying Approach
 
-The original dataset is in wide format because each year is stored in a separate column. I plan to use `pivot_longer()` from the `tidyr` package to convert the year columns into two variables: `Year` and `LifeExpectancy`.
+The original dataset was in wide format, with each year stored in a separate column. I used `pivot_longer()` from the `tidyr` package to convert the year columns into two variables: `Year` and `LifeExpectancy`.
 
-I will also use `dplyr` to select relevant variables, identify missing values, and separate individual countries from regional aggregates using the World Bank country metadata. I will keep the original CSV unchanged and perform all transformations in R.
+I also used `dplyr` to select the relevant columns, check missing values, and remove regional aggregates using World Bank country metadata. I kept the original CSV files unchanged and completed all transformations in R.
 
-# Planned Analysis
+# Analysis Approach
 
-I plan to compare life expectancy in 2019, 2021, and 2024 to examine the decline and recovery around the pandemic. I will calculate changes in life expectancy for individual countries and compare patterns across regions and income groups.
+I compared life expectancy in 2019, 2021, and 2024 to examine changes during and after the pandemic. I calculated the changes for individual countries and economies and compared patterns across income groups.
 
-I also plan to create line charts showing trends over time and bar charts highlighting countries with the largest declines and recoveries.
+I also created line charts to show life expectancy trends and bar charts to highlight countries with the largest declines and strongest recoveries.
 
-# Expected Challenges
+# Data Challenges
 
-Some countries may have missing observations, especially for recent years. The dataset also includes regional and income-group aggregates, which need to be distinguished from individual countries. Additionally, changes during the pandemic cannot automatically be attributed entirely to COVID-19.
+One challenge was separating individual countries and economies from regional aggregates. Some observations also had missing values or unusual year-to-year changes that required further attention.
 
-# Expected Outcome
+Another important consideration was that changes in life expectancy could not automatically be attributed entirely to COVID-19, since other factors may have influenced the results.
 
-I hope to identify differences in life expectancy recovery across countries and regions and better understand how global health outcomes changed during and after the pandemic.
+# Project Outcome
+
+The analysis included 217 countries and economies from the World Bank dataset. It identified countries with major life expectancy declines, countries with strong recoveries, and places that remained below their 2019 levels in 2024.
+
+The project also demonstrated how data cleaning, reshaping, joining datasets, and visualization in R can help answer real-world research questions.
+
+
+# Data Preparation and Exploration
+
+## Load Required Packages
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+library(plotly)
+library(countrycode)
+```
+
+## Import the Original Dataset
+
+```{r import-data}
+life_raw <- read_csv(
+  "data/life_expectancy_wide.csv",
+  skip = 4,
+  show_col_types = FALSE
+)
+
+dim(life_raw)
+names(life_raw)
+head(life_raw)
+```
+
+## Inspect the Original Data Structure
+
+The original World Bank dataset uses a wide format, where each row represents a country or regional aggregate and each year is stored in a separate column.
+
+```{r inspect-data}
+life_raw %>%
+  select(
+    `Country Name`,
+    `Country Code`,
+    `2019`:`2024`
+  ) %>%
+  glimpse()
+
+life_raw %>%
+  select(
+    `Country Name`,
+    `Country Code`,
+    `2019`,
+    `2020`,
+    `2021`,
+    `2022`,
+    `2023`,
+    `2024`
+  ) %>%
+  head(10) %>%
+  kable(
+    caption = "Original Wide-Format Life Expectancy Data"
+  )
+```
+
+
+# Data Tidying: Wide to Long Format
+
+The original World Bank dataset contained a separate column for each year. I used `pivot_longer()` to transform these columns into a single `Year` variable and a single `LifeExpectancy` variable.
+
+Since my research focused on changes between 2019 and 2024, I selected those years for the analysis.
+
+```{r tidy-life-expectancy}
+life_tidy <- life_raw %>%
+  select(
+    `Country Name`,
+    `Country Code`,
+    `2019`:`2024`
+  ) %>%
+  pivot_longer(
+    cols = `2019`:`2024`,
+    names_to = "Year",
+    values_to = "LifeExpectancy"
+  ) %>%
+  mutate(
+    Year = as.integer(Year)
+  )
+
+head(life_tidy, 12)
+```
+
+## Inspect the Tidied Dataset
+
+```{r inspect-tidy-data}
+cat("Original dataset dimensions:\n")
+dim(life_raw)
+
+cat("\nTidied dataset dimensions:\n")
+dim(life_tidy)
+
+cat("\nTidied dataset structure:\n")
+glimpse(life_tidy)
+```
+
+## Display the Tidied Data
+
+```{r display-tidy-data}
+life_tidy %>%
+  head(12) %>%
+  kable(
+    digits = 2,
+    caption = "Life Expectancy Data After Tidying"
+  )
+```
+
+
+
+# Country Metadata and Data Cleaning
+
+The World Bank dataset included both individual countries and regional aggregates. I used the country metadata file to identify countries and economies and add regional and income-group information.
+
+## Import Country Metadata
+
+```{r import-country-metadata}
+country_metadata_raw <- read_csv(
+  "data/life_expectancy_countries.csv",
+  show_col_types = FALSE
+)
+
+dim(country_metadata_raw)
+names(country_metadata_raw)
+
+country_metadata_raw %>%
+  head(10) %>%
+  kable(caption = "World Bank Country Metadata")
+```
+
+## Inspect Metadata Structure
+
+```{r inspect-country-metadata}
+glimpse(country_metadata_raw)
+```
+
+
+# Joining and Cleaning the Data
+
+I joined the tidied life expectancy dataset with the World Bank country metadata using `Country Code`.
+
+I then removed regional aggregates by keeping records with valid region and income-group classifications.
+
+## Prepare Country Metadata
+
+```{r prepare-country-metadata}
+country_metadata <- country_metadata_raw %>%
+  select(
+    `Country Code`,
+    Region,
+    IncomeGroup
+  ) %>%
+  distinct(`Country Code`, .keep_all = TRUE)
+
+country_metadata %>%
+  head(10) %>%
+  kable(caption = "Cleaned Country Metadata")
+```
+
+## Join Life Expectancy and Country Metadata
+
+```{r join-country-metadata}
+life_joined <- life_tidy %>%
+  left_join(
+    country_metadata,
+    by = "Country Code"
+  )
+
+cat("Rows after joining:", nrow(life_joined), "\n")
+
+life_joined %>%
+  head(10) %>%
+  kable(
+    digits = 2,
+    caption = "Life Expectancy Data with Country Metadata"
+  )
+```
+
+## Remove Regional Aggregates
+
+```{r filter-countries}
+life_clean <- life_joined %>%
+  filter(
+    !is.na(Region),
+    !is.na(IncomeGroup)
+  )
+
+cat("Rows before filtering:", nrow(life_joined), "\n")
+cat("Rows after filtering:", nrow(life_clean), "\n")
+
+cat(
+  "Number of countries:",
+  n_distinct(life_clean$`Country Code`),
+  "\n"
+)
+
+life_clean %>%
+  head(10) %>%
+  kable(
+    digits = 2,
+    caption = "Cleaned Country-Level Life Expectancy Data"
+  )
+```
+
+## Check Missing Values
+
+```{r check-missing-values}
+missing_summary <- life_clean %>%
+  group_by(Year) %>%
+  summarise(
+    TotalRecords = n(),
+    MissingLifeExpectancy = sum(is.na(LifeExpectancy)),
+    AvailableLifeExpectancy = sum(!is.na(LifeExpectancy)),
+    .groups = "drop"
+  )
+
+missing_summary %>%
+  kable(
+    caption = "Missing Life Expectancy Values by Year"
+  )
+```
+
+
+
+# Life Expectancy Decline and Recovery Analysis
+
+To understand how life expectancy changed during and after the COVID-19 pandemic, I compared life expectancy in 2019, 2021, and 2024.
+
+The analysis measured changes during the pandemic period, recovery after 2021, and the overall difference from the pre-pandemic baseline.
+
+## Prepare Country-Level Comparisons
+
+```{r calculate-life-changes}
+life_changes <- life_clean %>%
+  filter(Year %in% c(2019, 2021, 2024)) %>%
+  select(
+    `Country Name`,
+    `Country Code`,
+    Region,
+    IncomeGroup,
+    Year,
+    LifeExpectancy
+  ) %>%
+  pivot_wider(
+    names_from = Year,
+    values_from = LifeExpectancy,
+    names_prefix = "Life_"
+  ) %>%
+  mutate(
+    PandemicChange = Life_2021 - Life_2019,
+    RecoveryChange = Life_2024 - Life_2021,
+    OverallChange = Life_2024 - Life_2019
+  )
+
+life_changes %>%
+  head(10) %>%
+  kable(
+    digits = 2,
+    caption = "Life Expectancy Changes by Country"
+  )
+```
+
+## Check Available Comparisons
+
+```{r check-life-comparisons}
+life_changes %>%
+  summarise(
+    TotalCountries = n(),
+    CompleteComparisons = sum(
+      !is.na(Life_2019) &
+      !is.na(Life_2021) &
+      !is.na(Life_2024)
+    ),
+    MissingComparisons = sum(
+      is.na(Life_2019) |
+      is.na(Life_2021) |
+      is.na(Life_2024)
+    )
+  ) %>%
+  kable(
+    caption = "Data Availability for Country Comparisons"
+  )
+```
+
+## Countries with the Largest Declines
+
+```{r largest-life-declines}
+life_changes %>%
+  filter(!is.na(PandemicChange)) %>%
+  arrange(PandemicChange) %>%
+  select(
+    `Country Name`,
+    Region,
+    PandemicChange
+  ) %>%
+  head(10) %>%
+  kable(
+    digits = 2,
+    caption = "10 Largest Life Expectancy Declines, 2019–2021"
+  )
+```
+
+## Countries with the Strongest Recoveries
+
+```{r strongest-life-recoveries}
+life_changes %>%
+  filter(!is.na(RecoveryChange)) %>%
+  arrange(desc(RecoveryChange)) %>%
+  select(
+    `Country Name`,
+    Region,
+    RecoveryChange
+  ) %>%
+  head(10) %>%
+  kable(
+    digits = 2,
+    caption = "10 Largest Life Expectancy Increases, 2021–2024"
+  )
+```
+
+## Countries Still Below Their 2019 Levels
+
+```{r below-pre-pandemic}
+life_changes %>%
+  filter(!is.na(OverallChange), OverallChange < 0) %>%
+  arrange(OverallChange) %>%
+  select(
+    `Country Name`,
+    Region,
+    OverallChange
+  ) %>%
+  head(10) %>%
+  kable(
+    digits = 2,
+    caption = "Countries Furthest Below 2019 Life Expectancy in 2024"
+  )
+```
+
+
+# Data Visualization
+## Life Expectancy Trends by Income Group
+
+```{r income-group-visualization, fig.width=10, fig.height=6}
+income_trends <- life_clean %>%
+  group_by(IncomeGroup, Year) %>%
+  summarise(
+    AverageLifeExpectancy = mean(
+      LifeExpectancy,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+ggplot(
+  income_trends,
+  aes(
+    x = Year,
+    y = AverageLifeExpectancy,
+    color = IncomeGroup,
+    group = IncomeGroup
+  )
+) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2.5) +
+  scale_x_continuous(breaks = 2019:2024) +
+  labs(
+    title = "Life Expectancy Trends by Income Group",
+    subtitle = "Average country-level life expectancy, 2019–2024",
+    x = "Year",
+    y = "Life Expectancy (Years)",
+    color = "Income Group",
+    caption = "Source: World Bank World Development Indicators"
+  ) +
+  theme_minimal()
+```
+
+This visualization compares average life expectancy across different income groups from 2019 to 2024. It helps show how life expectancy changed during and after the COVID-19 pandemic and whether recovery patterns differed between income groups. The chart also highlights the differences in life expectancy levels across these groups. Each average represents the countries and economies with available data, rather than a population-weighted global average.
+
+
+## Largest Life Expectancy Declines
+
+```{r decline-visualization, fig.width=10, fig.height=6}
+largest_declines <- life_changes %>%
+  filter(!is.na(PandemicChange)) %>%
+  slice_min(
+    PandemicChange,
+    n = 10,
+    with_ties = FALSE
+  )
+
+ggplot(
+  largest_declines,
+  aes(
+    x = reorder(`Country Name`, PandemicChange),
+    y = PandemicChange
+  )
+) +
+  geom_col(fill = "#C44E52") +
+  coord_flip() +
+  labs(
+    title = "Countries with the Largest Life Expectancy Declines",
+    subtitle = "Change from 2019 to 2021",
+    x = "Country",
+    y = "Change in Life Expectancy (Years)",
+    caption = "Source: World Bank World Development Indicators"
+  ) +
+  theme_minimal()
+```
+
+This visualization shows the 10 countries with the largest life expectancy declines between 2019 and 2021. Bolivia experienced the largest decline at approximately 6.39 years, followed by Paraguay at 5.56 years and Mexico at 4.78 years. Several Latin American countries appear in this chart, showing how strongly life expectancy was affected in parts of the region during the pandemic period.
+
+## Strongest Life Expectancy Recoveries
+
+```{r recovery-visualization, fig.width=10, fig.height=6}
+strongest_recoveries <- life_changes %>%
+  filter(!is.na(RecoveryChange)) %>%
+  slice_max(
+    RecoveryChange,
+    n = 10,
+    with_ties = FALSE
+  )
+
+ggplot(
+  strongest_recoveries,
+  aes(
+    x = reorder(`Country Name`, RecoveryChange),
+    y = RecoveryChange
+  )
+) +
+  geom_col(fill = "#4C9F70") +
+  coord_flip() +
+  labs(
+    title = "Countries with the Strongest Life Expectancy Recoveries",
+    subtitle = "Change from 2021 to 2024",
+    x = "Country",
+    y = "Increase in Life Expectancy (Years)",
+    caption = "Source: World Bank World Development Indicators"
+  ) +
+  theme_minimal()
+```
+
+This visualization shows the countries with the largest increases in life expectancy between 2021 and 2024. The Central African Republic had the largest reported increase at 17.4 years, but its data contain unusual fluctuations that require verification. Bolivia followed with an increase of 7.31 years, Namibia with 6.67 years, and Peru with 6.34 years. The results show that countries recovered at different rates, and a strong recovery did not always mean returning to pre-pandemic levels.
+
+## Data Quality Check: Central African Republic
+
+The Central African Republic has unusually large changes in life expectancy between consecutive years. I reviewed these observations separately because they may influence the ranking of countries with the strongest recoveries.
+
+```{r check-central-african-republic}
+life_clean %>%
+  filter(`Country Code` == "CAF") %>%
+  arrange(Year) %>%
+  select(Year, LifeExpectancy) %>%
+  kable(
+    digits = 2,
+    caption = "Central African Republic Life Expectancy, 2019–2024"
+  )
+```
+
+These unusually large changes, especially the decrease in 2022 followed by a sharp increase in 2023, suggest that this country's results should be interpreted cautiously until the source data can be verified.
+
+
+
+## Interactive World Life Expectancy Recovery Map
+
+This interactive map shows how life expectancy changed across countries between 2019 and 2024 compared with their 2019 levels. Use the year slider to explore changes over time.
+
+```{r interactive-world-map, message=FALSE, warning=FALSE, fig.width=11, fig.height=7}
+map_data <- life_clean %>%
+  group_by(`Country Code`) %>%
+  mutate(
+    Life2019 = LifeExpectancy[match(2019, Year)],
+    ChangeFrom2019 = LifeExpectancy - Life2019
+  ) %>%
+  ungroup() %>%
+  filter(
+    !is.na(ChangeFrom2019),
+    !is.na(LifeExpectancy)
+  ) %>%
+  mutate(
+    HoverText = paste0(
+      "<b>", `Country Name`, "</b>",
+      "<br>Year: ", Year,
+      "<br>Life Expectancy: ",
+      round(LifeExpectancy, 2), " years",
+      "<br>Change from 2019: ",
+      sprintf("%+.2f", ChangeFrom2019), " years"
+    )
+  )
+
+plot_ly(
+  data = map_data,
+  type = "choropleth",
+  locations = ~`Country Code`,
+  locationmode = "ISO-3",
+  z = ~ChangeFrom2019,
+  frame = ~Year,
+  text = ~HoverText,
+  hoverinfo = "text",
+  colorscale = list(
+    c(0, "#C44E52"),
+    c(0.5, "#F7F7F7"),
+    c(1, "#4C9F70")
+  ),
+  zmin = -10,
+  zmax = 10,
+  zmid = 0,
+  colorbar = list(title = "Change (Years)")
+) %>%
+  layout(
+    title = "Global Life Expectancy Change Since 2019",
+    geo = list(
+      showframe = FALSE,
+      showcoastlines = TRUE,
+      projection = list(type = "natural earth")
+    )
+  ) %>%
+  animation_opts(
+    frame = 1000,
+    transition = 500,
+    redraw = TRUE
+  ) %>%
+  animation_slider(
+    currentvalue = list(prefix = "Year: ")
+  )
+```
+
+The interactive map uses red to represent countries with lower life expectancy than in 2019 and green for countries with higher life expectancy. Viewers can move the year slider to compare different years and hover over countries to see their values. Countries without available data or a matching map location may not be colored.
+
+
+# Results and Discussion
+
+## Countries Still Below Their 2019 Levels
+
+Although many countries experienced increases in life expectancy after 2021, some had not returned to their 2019 levels by 2024. West Bank and Gaza showed the largest overall decline at approximately 6.60 years, followed by Libya and Greenland. This shows that recovery was not equal across countries.
+
+## Limitations
+
+Some countries have missing data or unusual changes that require verification. The dataset also includes territories and economies, not just independent countries. Additionally, changes in life expectancy cannot be attributed entirely to COVID-19 because other factors may have influenced the results. Countries with missing life expectancy values were excluded from comparisons requiring those years, so the rankings only include countries with available data.
+
+
+# Conclusion
+
+This project analyzed life expectancy across 217 countries and economies from 2019 to 2024 using World Bank data. The results show that many countries experienced declines during the pandemic period and recovered afterward, but not at the same rate. By cleaning, transforming, and visualizing the data in R, I was able to identify differences in life expectancy recovery across countries and income groups.
